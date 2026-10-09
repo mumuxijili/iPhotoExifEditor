@@ -60,3 +60,14 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Local reports and signing credentials
+*.ips
+*.crash
+*.mobileprovision
+*.p12
+*.p8
+*.pem
+*.key
+.env
+.env.*

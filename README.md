@@ -37,3 +37,7 @@
 GitHub Actions 使用 XcodeGen 从 `project.yml` 生成 Xcode 工程。生成的 `.xcodeproj` 不需要提交。
 
 详细设计、安全约束和真机测试项目见 [开发方案](docs/iPhotoExifEditor_开发方案.md)。
+
+## 开源许可
+
+本项目采用 [MIT License](LICENSE)，版权署名为 `mumuxijili`。允许自由使用、修改、再发布及商业使用；分发本项目或其主要部分时，须保留版权声明和许可文本。应用内“设置 → 关于”也提供作者署名和完整许可证。

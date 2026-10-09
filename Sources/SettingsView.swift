@@ -25,6 +25,17 @@ struct SettingsView: View {
                 Section("关于") {
                     LabeledContent("应用", value: "iPhotoExifEditor")
                     LabeledContent("版本", value: Self.versionDescription)
+                    LabeledContent("作者", value: "mumuxijili")
+                    NavigationLink("MIT 开源许可") {
+                        ScrollView {
+                            Text(Self.licenseText)
+                                .font(.footnote)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                        }
+                        .navigationTitle("MIT License")
+                        .navigationBarTitleDisplayMode(.inline)
+                    }
                 }
             }
             .navigationTitle("设置")
@@ -37,6 +48,14 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private static var licenseText: String {
+        guard let url = Bundle.main.url(forResource: "LICENSE", withExtension: nil),
+              let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return "MIT License — Copyright © 2026 mumuxijili"
+        }
+        return text
     }
 
     private static var versionDescription: String {
