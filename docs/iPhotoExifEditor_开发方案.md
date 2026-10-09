@@ -201,11 +201,19 @@ SideStore 是否成功安装取决于其签名和侧载能力、账号限制、�
 
 ```text
 iPhotoExifEditor/
+├── README.md
 ├── project.yml
 ├── Sources/
+│   ├── ContentView.swift
+│   ├── GPSEditorView.swift
 │   ├── iPhotoExifEditorApp.swift
-│   ├── PhotoLibraryModel.swift
-│   └── ContentView.swift
+│   ├── LocationClipboardPayload.swift
+│   ├── LocationMapView.swift
+│   ├── PhotoAssetImageView.swift
+│   ├── PhotoEditDraft.swift
+│   ├── PhotoEditorView.swift
+│   ├── PhotoLibraryStore.swift
+│   └── PhotoSourcePickerView.swift
 └── .github/
     └── workflows/
         └── build.yml
@@ -222,7 +230,7 @@ targets:
   iPhotoExifEditor:
     type: application
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget: "17.0"
     sources:
       - Sources
     settings:
@@ -232,6 +240,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "需要读取并修改所选照片的位置和拍摄日期"
+        INFOPLIST_KEY_PHPhotoLibraryPreventAutomaticLimitedAccessAlert: YES
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGNING_ALLOWED: NO
