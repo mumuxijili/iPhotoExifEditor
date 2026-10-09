@@ -72,6 +72,7 @@ struct ContentView: View {
 
 private struct PhotoLibraryGridView: View {
     @EnvironmentObject private var photoLibrary: PhotoLibraryStore
+    @State private var isShowingLimitedLibraryPicker = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 104, maximum: 180), spacing: 2)
@@ -107,11 +108,11 @@ private struct PhotoLibraryGridView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if photoLibrary.authorizationStatus == .limited {
                     Button {
-                        openPhotoAccessSettings()
+                        isShowingLimitedLibraryPicker = true
                     } label: {
                         Label("添加可访问照片", systemImage: "photo.badge.plus")
                     }
-                    .accessibilityHint("在系统设置中编辑已授权照片，返回后自动刷新")
+                    .disabled(isShowingLimitedLibraryPicker)
                 }
 
                 Button {
@@ -124,13 +125,17 @@ private struct PhotoLibraryGridView: View {
         .refreshable {
             photoLibrary.loadAssets()
         }
-    }
-
-    private func openPhotoAccessSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else {
-            return
+        .sheet(
+            isPresented: $isShowingLimitedLibraryPicker,
+            onDismiss: {
+                photoLibrary.refreshAuthorization()
+            }
+        ) {
+            LimitedLibraryPickerView {
+                isShowingLimitedLibraryPicker = false
+            }
+            .interactiveDismissDisabled()
         }
-        UIApplication.shared.open(url)
     }
 }
 
