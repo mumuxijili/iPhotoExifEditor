@@ -1,7 +1,6 @@
 import Combine
 import CoreLocation
 import Photos
-import PhotosUI
 import UIKit
 
 @MainActor
@@ -104,13 +103,6 @@ final class PhotoLibraryStore: NSObject, ObservableObject {
         imageManager.cancelImageRequest(requestID)
     }
 
-    func presentLimitedLibraryPicker(from viewController: UIViewController) {
-        PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: viewController) { [weak self] (_: [String]) in
-            DispatchQueue.main.async {
-                self?.loadAssets()
-            }
-        }
-    }
 
     func updateLocation(
         assetID: String,
