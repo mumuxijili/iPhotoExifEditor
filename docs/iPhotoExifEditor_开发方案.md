@@ -17,6 +17,16 @@
 
 **重要边界：** `PHAssetChangeRequest.location` / `.creationDate` 修改的是 Photos 管理的照片资产属性。Apple 没有承诺它会原地覆盖原始 JPEG/HEIC 文件中的 EXIF GPS 或 EXIF 拍摄时间字节。第一阶段**不使用 ImageIO 写出新文件，不提供 ISO、光圈、快门、设备型号、版权、任意 EXIF 键值等编辑功能**。若要求“原始文件的 EXIF 本身永久变化”，那属于以后单独设计的 ImageIO 文件编辑路线。AirDrop/导出时最终携带何种 GPS，需对实际导出文件做验证，不应直接假定与原始资源相同。
 
+### 1.1 全阶段照片安全约束
+
+以下约束适用于第一阶段及所有后续功能，新增功能和代码评审必须逐项确认：
+
+1. **绝不删除照片**：不调用 `PHAssetChangeRequest.deleteAssets`，不提供删除图库照片或原始文件的操作；失败、取消或清理临时文件时也不能删除用户已有照片。
+2. **绝不覆盖已有图片文件**：第一阶段不生成新图片，只修改用户明确选定的现有 `PHAsset` 的位置或日期属性。修改资产属性不等于替换其图片文件。
+3. **未来若生成新图片，必须另存**：生成结果使用新的文件路径和唯一文件名，并采用拒绝覆盖已有文件的写入方式；遇到同名文件时重新命名或停止并提示。不得写回原始资源路径，也不得静默替换图库中已有资产。
+4. **写入前确认目标**：界面展示源照片、目标照片及将修改的字段，由用户确认后再提交；批量功能还须展示目标数量。目标不明确或无法保证上述约束时停止操作并说明原因。
+5. **持续验证**：每次增加导入、导出、批量或文件编辑能力，都要验证原有照片没有被删除，原有图片文件和同名输出文件没有被覆盖。
+
 ## 2. API 与工作机制
 
 ### 2.1 使用的公开 API
@@ -303,6 +313,14 @@ struct ContentView: View {
     @State private var sourceID = ""
     @State private var targetID = ""
     @State private var selectedDate = Date()
+    @State private var pendingEdit: PendingEdit?
+    @State private var showWriteConfirmation = false
+
+    private enum PendingEdit {
+        case copyDate(sourceID: String, targetID: String)
+        case setDate(targetID: String, date: Date)
+        case copyGPS(sourceID: String, targetID: String)
+    }
 
     var body: some View {
         NavigationStack {
@@ -336,7 +354,8 @@ struct ContentView: View {
 
                 Section("拍摄日期") {
                     Button("将源照片拍摄日期复制到目标照片") {
-                        library.copyDate(sourceID: sourceID, targetID: targetID)
+                        pendingEdit = .copyDate(sourceID: sourceID, targetID: targetID)
+                        showWriteConfirmation = true
                     }
                     .disabled(library.isWorking || sourceID.isEmpty ||
                               targetID.isEmpty || sourceID == targetID)
@@ -344,27 +363,68 @@ struct ContentView: View {
                     DatePicker("设置目标拍摄日期", selection: $selectedDate,
                                displayedComponents: [.date, .hourAndMinute])
                     Button("写入所选日期") {
-                        library.updateDate(targetID: targetID, date: selectedDate)
+                        pendingEdit = .setDate(targetID: targetID, date: selectedDate)
+                        showWriteConfirmation = true
                     }
                     .disabled(library.isWorking || targetID.isEmpty)
                 }
 
                 Section("GPS") {
                     Button("将源照片 GPS 写入目标照片") {
-                        library.copyGPS(sourceID: sourceID, targetID: targetID)
+                        pendingEdit = .copyGPS(sourceID: sourceID, targetID: targetID)
+                        showWriteConfirmation = true
                     }
                     .disabled(library.isWorking || sourceID.isEmpty ||
                               targetID.isEmpty || sourceID == targetID)
                 }
             }
             .navigationTitle("iPhotoExifEditor")
+            .confirmationDialog("确认修改照片", isPresented: $showWriteConfirmation,
+                                titleVisibility: .visible) {
+                Button("确认写入") {
+                    guard let edit = pendingEdit else { return }
+                    pendingEdit = nil
+                    switch edit {
+                    case let .copyDate(sourceID, targetID):
+                        library.copyDate(sourceID: sourceID, targetID: targetID)
+                    case let .setDate(targetID, date):
+                        library.updateDate(targetID: targetID, date: date)
+                    case let .copyGPS(sourceID, targetID):
+                        library.copyGPS(sourceID: sourceID, targetID: targetID)
+                    }
+                }
+                Button("取消", role: .cancel) { pendingEdit = nil }
+            } message: {
+                Text(confirmationText)
+            }
             .onAppear { library.requestAccessAndLoad() }
         }
+    }
+
+    private func photoLabel(_ id: String) -> String {
+        let title = library.photos.first(where: { $0.id == id })?.title ?? "未知照片"
+        return "\(title)（ID: \(id)）"
+    }
+
+    private var confirmationText: String {
+        guard let edit = pendingEdit else { return "未选择修改操作。" }
+        let detail: String
+        switch edit {
+        case let .copyDate(sourceID, targetID):
+            detail = "将源照片 \(photoLabel(sourceID)) 的日期复制到目标 \(photoLabel(targetID))。"
+        case let .setDate(targetID, date):
+            let value = DateFormatter.localizedString(from: date, dateStyle: .medium,
+                                                        timeStyle: .short)
+            detail = "将目标 \(photoLabel(targetID)) 的日期设为 \(value)（当前时区）。"
+        case let .copyGPS(sourceID, targetID):
+            detail = "将源照片 \(photoLabel(sourceID)) 的位置复制到目标 \(photoLabel(targetID))。"
+        }
+        return detail + " 不会删除、生成或替换图片。"
     }
 }
 ```
 
-这是一版功能验证界面：提供 GPS 复制、日期复制和日期手工编辑；GPS 手工输入/清除可作为下一次迭代。没有缩略图，因此相近拍摄时间的照片不容易区分。建议先验证 API 和安装流程，再增加缩略图选择器。若实际使用照片很多，优先实现分页/网格而不是一次列出所有照片。
+这是一版功能验证界面：提供 GPS 复制、日期复制和日期手工编辑，并在每次写入前确认目标；GPS 手工输入/清除可作为下一次迭代。没有缩略图，因此相近拍摄时间的照片不容易区分。建议先验证 API 和安装流程，再增加缩略图选择器。若实际使用照片很多，优先实现分页/网格而不是一次列出所有照片。
 
 ## 5. GitHub Actions 编译未签名 IPA
 
@@ -376,7 +436,7 @@ name: Build iPhotoExifEditor IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   build:
@@ -424,7 +484,7 @@ jobs:
 
 操作流程：
 
-1. 将上述文件提交到 GitHub 仓库的 `main` 分支。
+1. 将上述文件提交到 GitHub 仓库的 `master` 分支。
 2. 打开仓库 **Actions** → **Build iPhotoExifEditor IPA** → **Run workflow**（也可直接 Push 触发）。
 3. 等待 Build 成功。
 4. 在该 Workflow Run 页面下载 Artifact `iPhotoExifEditor-IPA`。
@@ -462,12 +522,13 @@ with zipfile.ZipFile("iPhotoExifEditor.ipa") as ipa:
 2. **无 GPS 源照片**：应拒绝写入并显示原因。
 3. **同一照片**：禁止源和目标相同。
 4. **成功写入**：目标 `PHAsset.location` / `creationDate` 更新，图库中没有新照片。
-5. **日期和时区**：验证 `DatePicker` 输入、跨时区显示、照片库排序及复制日期的一致性。
-6. **保留画质**：确认未使用图片重新编码操作。
-7. **iCloud 照片**：测试云端资产和同步后在其他设备上的表现。
-8. **导出 EXIF**：AirDrop 到另一设备或导出原件/当前版本后，用 ExifTool 分别检查 GPS。注意“导出未修改的原件”和“导出当前版本”可能得到不同结果。
-9. **中国大陆坐标**：选取已知实际位置，比较原始 EXIF、`PHAsset.location`、Apple 地图显示位置；不要在未验证前自动套用 GCJ-02 转换。
-10. **覆盖升级**：构建号递增，重新经 SideStore 安装，确认旧版被更新且设置保留。
+5. **删除与覆盖保护**：在测试图库中核对操作前后的照片数量及 `localIdentifier`，确认没有照片被删除，原有图片文件未被替换。未来生成新图片时，再测同名文件和重复导入，确认已有文件及资产均未被覆盖。
+6. **日期和时区**：验证 `DatePicker` 输入、跨时区显示、照片库排序及复制日期的一致性。
+7. **保留画质**：确认未使用图片重新编码操作。
+8. **iCloud 照片**：测试云端资产和同步后在其他设备上的表现。
+9. **导出 EXIF**：AirDrop 到另一设备或导出原件/当前版本后，用 ExifTool 分别检查 GPS。注意“导出未修改的原件”和“导出当前版本”可能得到不同结果。
+10. **中国大陆坐标**：选取已知实际位置，比较原始 EXIF、`PHAsset.location`、Apple 地图显示位置；不要在未验证前自动套用 GCJ-02 转换。
+11. **覆盖升级**：构建号递增，重新经 SideStore 安装，确认旧版被更新且设置保留。
 
 在电脑上可使用 ExifTool 检查实际文件：
 
@@ -485,7 +546,7 @@ exiftool -GPSLatitude -GPSLongitude -GPSLatitudeRef -GPSLongitudeRef -n photo.he
 4. **MapKit 地图选点**：显示选点经纬度，并在中国大陆实际验证坐标一致性。
 5. **清除位置**：将 `PHAssetChangeRequest.location` 设为 `nil`（需要确认具体资产操作是否成功）。
 6. **批量修改拍摄日期**：支持统一日期或按时间差平移。
-7. **EXIF 文件编辑模式（明确不属于第一阶段）**：若以后需要修改原始文件元数据，另行评估 ImageIO 方案。
+7. **EXIF 文件编辑模式（明确不属于第一阶段）**：若以后需要修改文件元数据，另行评估 ImageIO 方案；生成结果必须另存，不得删除或覆盖原始图片及任何已有图片。
 
 ## 9. 常见问题
 
