@@ -104,7 +104,7 @@ MapKit 没有提供稳定、公开的运行时接口来判断当前底图是否�
 1. 首次进入时，通过明确的用户操作申请照片库读写权限。
 2. 授权后使用 `PHImageManager.requestImage` 加载缩略图，以网格形式显示当前授权范围内的照片。
 3. 点击一张照片，将其作为目标照片进入编辑模式。主界面不提供删除操作。右上角提供设置入口，集中显示中国大陆地图校正开关以及版本、Build 号。
-4. 在 `.limited` 权限下只显示已授权照片。右上角“添加可访问照片”在应用内打开系统有限照片授权选择页；选择页关闭后刷新网格。选择器由实际显示的 UIKit 宿主页面在 `viewDidAppear` 之后呈现。
+4. 在 `.limited` 权限下只显示已授权照片。右上角按钮在应用内调用 `PHPhotoLibrary.presentLimitedLibraryPicker` 打开系统有限照片授权选择页；选择页关闭后刷新网格。`Info.plist` 将 `PHPhotoLibraryPreventAutomaticLimitedAccessAlert` 设为布尔值 `true`，由用户主动打开选择页，避免系统在启动时另外弹出一次。
 5. 网格按需加载缩略图，不一次请求原图；支持滚动时的请求取消和缓存，避免大量照片导致内存压力。
 
 #### 编辑模式
@@ -209,6 +209,7 @@ SideStore 是否成功安装取决于其签名和侧载能力、账号限制、�
 iPhotoExifEditor/
 ├── README.md
 ├── project.yml
+├── Info.plist
 ├── Sources/
 │   ├── Assets.xcassets/
 │   ├── ContentView.swift
@@ -217,7 +218,6 @@ iPhotoExifEditor/
 │   ├── iPhotoExifEditorApp.swift
 │   ├── LocationClipboardPayload.swift
 │   ├── LocationMapView.swift
-│   ├── LimitedLibraryPickerView.swift
 │   ├── LocationSearchView.swift
 │   ├── SettingsView.swift
 │   ├── PhotoAssetImageView.swift
@@ -249,13 +249,14 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.iphotoexifeditor
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "需要读取并修改所选照片的位置和拍摄日期"
-        INFOPLIST_KEY_PHPhotoLibraryPreventAutomaticLimitedAccessAlert: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Info.plist
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "7"
         CODE_SIGNING_ALLOWED: NO
 ```
+
+`Info.plist` 中明确写入 `<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key><true/>` 和照片库用途说明。GitHub Actions 编译后读取生成的 App `Info.plist`，确认这个键确实是布尔值 `true`。
 
 `PRODUCT_BUNDLE_IDENTIFIER` 应改为你自己长期固定使用的唯一标识，例如 `com.yourname.iphotoexifeditor`。后续升级保持它不变。应用的显示名称、IPA 文件名不是识别同一 App 的依据；SideStore 重新签名后，最终安装身份也必须与旧版兼容。
 
@@ -614,7 +615,7 @@ with zipfile.ZipFile("iPhotoExifEditor.ipa") as ipa:
 
 ## 7. 测试计划
 
-1. **权限与网格**：验证完全授权、有限照片访问和拒绝访问；有限权限下点击右上角按钮应在应用内打开系统授权选择页，增加照片并关闭后网格自动刷新；缩略图滚动稳定且不会加载全部原图。
+1. **权限与网格**：验证完全授权、有限照片访问和拒绝访问。有限权限下启动时不应自动弹出“选择更多照片 / 保留当前所选内容”；点击右上角按钮应在应用内打开系统授权选择页，直接关闭后再次点击仍可打开；增加照片并关闭后网格自动刷新。缩略图滚动稳定且不会加载全部原图。若仍出现启动弹窗或闪退，检查 Actions 中的 Info.plist 验证步骤，以及安装后 App 的实际 Info.plist 和设备崩溃日志。
 2. **目标选择**：点击网格中的照片后，编辑页预览、`localIdentifier`、GPS 和日期都对应同一资产。
 3. **无 GPS 来源**：从其他照片导入时应拒绝没有位置的来源，并保持原有草稿不变。
 4. **同一照片**：来源照片与目标照片相同时拒绝导入。

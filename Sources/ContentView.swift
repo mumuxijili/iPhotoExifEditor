@@ -72,7 +72,6 @@ struct ContentView: View {
 
 private struct PhotoLibraryGridView: View {
     @EnvironmentObject private var photoLibrary: PhotoLibraryStore
-    @State private var isShowingLimitedLibraryPicker = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 104, maximum: 180), spacing: 2)
@@ -108,11 +107,13 @@ private struct PhotoLibraryGridView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if photoLibrary.authorizationStatus == .limited {
                     Button {
-                        isShowingLimitedLibraryPicker = true
+                        guard let controller = UIApplication.shared.topViewController else {
+                            return
+                        }
+                        photoLibrary.presentLimitedLibraryPicker(from: controller)
                     } label: {
-                        Label("添加可访问照片", systemImage: "photo.badge.plus")
+                        Label("管理照片权限", systemImage: "photo.badge.plus")
                     }
-                    .disabled(isShowingLimitedLibraryPicker)
                 }
 
                 Button {
@@ -124,17 +125,6 @@ private struct PhotoLibraryGridView: View {
         }
         .refreshable {
             photoLibrary.loadAssets()
-        }
-        .sheet(
-            isPresented: $isShowingLimitedLibraryPicker,
-            onDismiss: {
-                photoLibrary.refreshAuthorization()
-            }
-        ) {
-            LimitedLibraryPickerView {
-                isShowingLimitedLibraryPicker = false
-            }
-            .interactiveDismissDisabled()
         }
     }
 }
@@ -171,5 +161,30 @@ struct PhotoGridCell: View {
             )
         } ?? "未知日期"
         return asset.location == nil ? "\(date)，无位置信息" : "\(date)，有位置信息"
+    }
+}
+
+private extension UIApplication {
+    var topViewController: UIViewController? {
+        let root = connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .rootViewController
+
+        return Self.topViewController(from: root)
+    }
+
+    static func topViewController(from controller: UIViewController?) -> UIViewController? {
+        if let presented = controller?.presentedViewController {
+            return topViewController(from: presented)
+        }
+        if let navigation = controller as? UINavigationController {
+            return topViewController(from: navigation.visibleViewController)
+        }
+        if let tab = controller as? UITabBarController {
+            return topViewController(from: tab.selectedViewController)
+        }
+        return controller
     }
 }
