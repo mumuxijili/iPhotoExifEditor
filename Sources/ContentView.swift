@@ -72,6 +72,7 @@ struct ContentView: View {
 
 private struct PhotoLibraryGridView: View {
     @EnvironmentObject private var photoLibrary: PhotoLibraryStore
+    @State private var isShowingPickerUnavailable = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 104, maximum: 180), spacing: 2)
@@ -110,7 +111,9 @@ private struct PhotoLibraryGridView: View {
                         guard let controller = UIApplication.shared.topViewController else {
                             return
                         }
-                        photoLibrary.presentLimitedLibraryPicker(from: controller)
+                        if !photoLibrary.presentLimitedLibraryPicker(from: controller) {
+                            isShowingPickerUnavailable = true
+                        }
                     } label: {
                         Label("管理照片权限", systemImage: "photo.badge.plus")
                     }
@@ -125,6 +128,17 @@ private struct PhotoLibraryGridView: View {
         }
         .refreshable {
             photoLibrary.loadAssets()
+        }
+        .alert("无法打开照片选择器", isPresented: $isShowingPickerUnavailable) {
+            Button("打开系统设置") {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else {
+                    return
+                }
+                UIApplication.shared.open(url)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("系统照片权限选择器暂不可用。可以在系统设置中更改允许访问的照片。")
         }
     }
 }

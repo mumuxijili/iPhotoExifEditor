@@ -104,12 +104,20 @@ final class PhotoLibraryStore: NSObject, ObservableObject {
         imageManager.cancelImageRequest(requestID)
     }
 
-    func presentLimitedLibraryPicker(from viewController: UIViewController) {
-        PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: viewController) { [weak self] (_: [String]) in
+    @discardableResult
+    func presentLimitedLibraryPicker(from viewController: UIViewController) -> Bool {
+        let library = PHPhotoLibrary.shared()
+        let selector = NSSelectorFromString("presentLimitedLibraryPickerFromViewController:completionHandler:")
+        guard library.responds(to: selector) else {
+            return false
+        }
+
+        library.presentLimitedLibraryPicker(from: viewController) { [weak self] (_: [String]) in
             DispatchQueue.main.async {
                 self?.loadAssets()
             }
         }
+        return true
     }
 
     func updateLocation(

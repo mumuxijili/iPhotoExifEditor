@@ -28,6 +28,10 @@
 
 也可以在 Actions 页面手动运行工作流。
 
+## 抓取 iPhone 崩溃日志
+
+稳定复现闪退后，在 iPhone 上打开 **设置 → 隐私与安全性 → 分析与改进 → 分析数据**，寻找时间最接近、文件名以 `iPhotoExifEditor` 开头的 `.ips` 报告。打开后用分享按钮保存并发送完整 `.ips` 文件；若没有同名报告，也检查对应时间的 `JetsamEvent_…`。请保留报告中的异常类型、崩溃线程和调用栈。无需安装 Xcode。
+
 ## 项目生成
 
 GitHub Actions 使用 XcodeGen 从 `project.yml` 生成 Xcode 工程。生成的 `.xcodeproj` 不需要提交。
