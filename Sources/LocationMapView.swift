@@ -5,6 +5,7 @@ import SwiftUI
 struct LocationMapView: UIViewRepresentable {
     let originalLocation: CLLocation?
     let proposedLocation: CLLocation?
+    var usesMainlandChinaCorrection = false
     var allowsPicking = false
     var onLongPress: ((CLLocation) -> Void)?
 
@@ -38,7 +39,10 @@ struct LocationMapView: UIViewRepresentable {
         if let originalLocation {
             annotations.append(
                 LocationAnnotation(
-                    coordinate: originalLocation.coordinate,
+                    coordinate: CoordinateConverter.mapCoordinate(
+                        fromWGS84: originalLocation.coordinate,
+                        usesGCJ02: usesMainlandChinaCorrection
+                    ),
                     kind: .original
                 )
             )
@@ -51,7 +55,10 @@ struct LocationMapView: UIViewRepresentable {
            ) {
             annotations.append(
                 LocationAnnotation(
-                    coordinate: proposedLocation.coordinate,
+                    coordinate: CoordinateConverter.mapCoordinate(
+                        fromWGS84: proposedLocation.coordinate,
+                        usesGCJ02: usesMainlandChinaCorrection
+                    ),
                     kind: .proposed
                 )
             )
@@ -63,7 +70,7 @@ struct LocationMapView: UIViewRepresentable {
             .map {
                 "\($0.kind.rawValue):\($0.coordinate.latitude):\($0.coordinate.longitude)"
             }
-            .joined(separator: "|")
+            .joined(separator: "|") + ":\(usesMainlandChinaCorrection)"
 
         guard signature != context.coordinator.lastRegionSignature else { return }
         context.coordinator.lastRegionSignature = signature
@@ -109,12 +116,19 @@ struct LocationMapView: UIViewRepresentable {
             }
 
             let point = recognizer.location(in: mapView)
-            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
-            guard CLLocationCoordinate2DIsValid(coordinate) else { return }
-            parent.onLongPress?(CLLocation(
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude
-            ))
+            let mapCoordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            guard CLLocationCoordinate2DIsValid(mapCoordinate) else { return }
+
+            let wgs84Coordinate = CoordinateConverter.wgs84Coordinate(
+                fromMapCoordinate: mapCoordinate,
+                usesGCJ02: parent.usesMainlandChinaCorrection
+            )
+            parent.onLongPress?(
+                CLLocation(
+                    latitude: wgs84Coordinate.latitude,
+                    longitude: wgs84Coordinate.longitude
+                )
+            )
         }
 
         func mapView(

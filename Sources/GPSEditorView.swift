@@ -3,6 +3,8 @@ import SwiftUI
 
 struct GPSEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("usesMainlandChinaMapCorrection")
+    private var usesMainlandChinaCorrection = false
 
     let targetAssetID: String
     let originalLocation: CLLocation?
@@ -29,6 +31,7 @@ struct GPSEditorView: View {
                 LocationMapView(
                     originalLocation: originalLocation,
                     proposedLocation: candidateForMap,
+                    usesMainlandChinaCorrection: usesMainlandChinaCorrection,
                     allowsPicking: true
                 ) { location in
                     candidateLocation = location
@@ -47,7 +50,7 @@ struct GPSEditorView: View {
 
                 VStack(spacing: 12) {
                     if let candidateLocation {
-                        Text(Self.coordinateText(candidateLocation))
+                        Text("WGS‑84  \(Self.coordinateText(candidateLocation))")
                             .font(.system(.body, design: .monospaced))
                             .textSelection(.enabled)
                     } else {
@@ -62,6 +65,17 @@ struct GPSEditorView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+
+                    Toggle(
+                        "中国大陆地图校正（GCJ‑02）",
+                        isOn: $usesMainlandChinaCorrection
+                    )
+                    .font(.footnote)
+
+                    Text("该选项只校正地图显示和选点；照片草稿始终使用 WGS‑84。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding()
                 .background(.bar)

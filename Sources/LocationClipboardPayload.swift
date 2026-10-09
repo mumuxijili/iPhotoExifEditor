@@ -5,6 +5,7 @@ import UIKit
 struct LocationClipboardPayload: Encodable {
     let format = "iPhotoExifEditor.location"
     let version = 1
+    let coordinateSystem = "WGS84"
     let latitude: Double
     let longitude: Double
     let altitude: Double?

@@ -6,6 +6,8 @@ import SwiftUI
 struct PhotoEditorView: View {
     @EnvironmentObject private var photoLibrary: PhotoLibraryStore
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("usesMainlandChinaMapCorrection")
+    private var usesMainlandChinaCorrection = false
 
     let asset: PHAsset
 
@@ -34,33 +36,38 @@ struct PhotoEditorView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                PhotoAssetImageView(
-                    asset: asset,
-                    contentMode: .fit,
-                    targetSize: CGSize(width: 1600, height: 1200)
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 280)
-                .background(.black)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 18) {
+                    PhotoAssetImageView(
+                        asset: asset,
+                        contentMode: .fit,
+                        targetSize: CGSize(width: 1600, height: 1200)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: previewHeight(for: proxy.size))
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
 
-                Picker("编辑项目", selection: $selectedTab) {
-                    ForEach(EditorTab.allCases) { tab in
-                        Text(tab.title).tag(tab)
+                    Picker("编辑项目", selection: $selectedTab) {
+                        ForEach(EditorTab.allCases) { tab in
+                            Text(tab.title).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    switch selectedTab {
+                    case .gps:
+                        gpsTab(mapHeight: mapHeight(for: proxy.size))
+                    case .date:
+                        dateTab
                     }
                 }
-                .pickerStyle(.segmented)
-
-                switch selectedTab {
-                case .gps:
-                    gpsTab
-                case .date:
-                    dateTab
-                }
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, horizontalPadding(for: proxy.size))
+                .padding(.vertical)
             }
-            .padding()
         }
         .navigationTitle("编辑照片")
         .navigationBarTitleDisplayMode(.inline)
@@ -125,13 +132,14 @@ struct PhotoEditorView: View {
         }
     }
 
-    private var gpsTab: some View {
+    private func gpsTab(mapHeight: CGFloat) -> some View {
         VStack(spacing: 14) {
             LocationMapView(
                 originalLocation: draft.originalLocation,
-                proposedLocation: draft.hasLocationChange ? draft.pendingLocation : nil
+                proposedLocation: draft.hasLocationChange ? draft.pendingLocation : nil,
+                usesMainlandChinaCorrection: usesMainlandChinaCorrection
             )
-            .frame(height: 300)
+            .frame(height: mapHeight)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay {
                 if draft.originalLocation == nil && !draft.hasLocationChange {
@@ -143,6 +151,16 @@ struct PhotoEditorView: View {
                     .background(.regularMaterial)
                 }
             }
+
+            Toggle(
+                "中国大陆地图校正（GCJ‑02）",
+                isOn: $usesMainlandChinaCorrection
+            )
+
+            Text("只校正地图标记和选点。照片、复制的 JSON 和写入值始终使用 WGS‑84。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             locationSummary
 
@@ -187,14 +205,14 @@ struct PhotoEditorView: View {
     private var locationSummary: some View {
         VStack(alignment: .leading, spacing: 8) {
             metadataRow(
-                title: "原位置",
+                title: "原位置（WGS‑84）",
                 value: Self.coordinateText(draft.originalLocation),
                 color: .blue
             )
 
             if draft.hasLocationChange {
                 metadataRow(
-                    title: "新位置",
+                    title: "新位置（WGS‑84）",
                     value: Self.coordinateText(draft.pendingLocation),
                     color: .orange
                 )
@@ -268,18 +286,45 @@ struct PhotoEditorView: View {
         value: String,
         color: Color
     ) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Circle()
-                .fill(color)
-                .frame(width: 9, height: 9)
-            Text(title)
-                .font(.subheadline.bold())
-            Spacer()
-            Text(value)
-                .font(.system(.subheadline, design: .monospaced))
-                .multilineTextAlignment(.trailing)
-                .textSelection(.enabled)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 9, height: 9)
+                Text(title)
+                    .font(.subheadline.bold())
+                Spacer()
+                Text(value)
+                    .font(.system(.subheadline, design: .monospaced))
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 9, height: 9)
+                    Text(title)
+                        .font(.subheadline.bold())
+                }
+                Text(value)
+                    .font(.system(.subheadline, design: .monospaced))
+                    .textSelection(.enabled)
+            }
         }
+    }
+
+    private func previewHeight(for size: CGSize) -> CGFloat {
+        min(max(size.height * (size.width > size.height ? 0.42 : 0.28), 200), 340)
+    }
+
+    private func mapHeight(for size: CGSize) -> CGFloat {
+        min(max(size.height * (size.width > size.height ? 0.48 : 0.36), 240), 390)
+    }
+
+    private func horizontalPadding(for size: CGSize) -> CGFloat {
+        size.width >= 700 ? 28 : 16
     }
 
     private var confirmationIsPresented: Binding<Bool> {

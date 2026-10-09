@@ -89,7 +89,11 @@ func copyLocation(from source: PHAsset, to target: PHAsset,
 
 ### 2.4 坐标系注意事项
 
-本工具复制或设置的是 `CLLocation`，**不做任何 WGS-84 / GCJ-02 转换**。MapKit 地图选点和从其他照片导入位置时，应对照真实位置、原始 EXIF、`PHAsset.location` 和地图显示结果进行实机验证；不要仅根据中国大陆地图底图的显示偏移自动转换照片坐标。
+照片资产、编辑草稿、复制的 JSON 与最终写入值统一使用 **WGS-84**。中国大陆地图底图若出现偏移，用户可启用“**中国大陆地图校正（GCJ-02）**”：显示标注时执行 WGS-84 → GCJ-02，地图长按选点后立即执行 GCJ-02 → WGS-84，再进入草稿和写入流程。转换只发生在地图边界，不能把 GCJ-02 写入 PHAsset.location。
+
+MapKit 没有提供稳定、公开的运行时接口来判断当前底图是否要求 GCJ-02，因此该校正是持久化的显式开关，默认关闭，避免已经由系统处理坐标时发生二次偏移。开关仅在中国大陆坐标范围内生效；香港、澳门、边界地区及底图来源变化仍需用已知地标进行真机核对。
+
+界面使用 SwiftUI 点坐标、安全区和可用容器尺寸进行布局，照片预览、地图高度、内容边距与网格列数均随屏幕变化；不按具体机型像素写死分支。因此 iPhone 16、17、18 系列及对应 Pro、Max 尺寸由同一套规则覆盖，并同时支持横竖屏和较大字体。
 
 ### 2.5 页面结构与编辑流程
 
@@ -135,6 +139,7 @@ struct PhotoEditDraft {
 {
   "format": "iPhotoExifEditor.location",
   "version": 1,
+  "coordinateSystem": "WGS84",
   "latitude": 22.3193,
   "longitude": 114.1694,
   "altitude": 12.5,
@@ -204,7 +209,9 @@ iPhotoExifEditor/
 ├── README.md
 ├── project.yml
 ├── Sources/
+│   ├── Assets.xcassets/
 │   ├── ContentView.swift
+│   ├── CoordinateConverter.swift
 │   ├── GPSEditorView.swift
 │   ├── iPhotoExifEditorApp.swift
 │   ├── LocationClipboardPayload.swift
@@ -617,7 +624,7 @@ with zipfile.ZipFile("iPhotoExifEditor.ipa") as ipa:
 12. **保留画质**：确认未使用图片重新编码操作。
 13. **iCloud 照片**：测试云端资产、下载中状态及同步后在其他设备上的表现。
 14. **导出 EXIF**：AirDrop 到另一设备或导出原件/当前版本后，用 ExifTool 分别检查 GPS。注意“导出未修改的原件”和“导出当前版本”可能得到不同结果。
-15. **中国大陆坐标**：选取已知实际位置，比较原始 EXIF、`PHAsset.location`、地图选点及 Apple 地图显示位置；不要在未验证前自动套用 GCJ-02 转换。
+15. **中国大陆坐标**：使用已知地标分别验证校正开关关闭和开启状态；开启时检查 WGS-84 标注转换到 GCJ-02 后与底图重合，并检查地图选点反向转换为 WGS-84 后再写入。
 16. **覆盖升级**：构建号递增，重新经 SideStore 安装，确认旧版被更新且设置保留。
 
 在电脑上可使用 ExifTool 检查实际文件：
