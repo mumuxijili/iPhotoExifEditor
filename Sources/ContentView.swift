@@ -1,5 +1,4 @@
 import Photos
-import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -73,7 +72,6 @@ struct ContentView: View {
 
 private struct PhotoLibraryGridView: View {
     @EnvironmentObject private var photoLibrary: PhotoLibraryStore
-    @State private var isShowingLimitedLibraryPicker = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 104, maximum: 180), spacing: 2)
@@ -109,11 +107,11 @@ private struct PhotoLibraryGridView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if photoLibrary.authorizationStatus == .limited {
                     Button {
-                        isShowingLimitedLibraryPicker = true
+                        openPhotoAccessSettings()
                     } label: {
-                        Label("管理照片权限", systemImage: "photo.badge.plus")
+                        Label("添加可访问照片", systemImage: "photo.badge.plus")
                     }
-                    .disabled(isShowingLimitedLibraryPicker)
+                    .accessibilityHint("在系统设置中编辑已授权照片，返回后自动刷新")
                 }
 
                 Button {
@@ -126,15 +124,13 @@ private struct PhotoLibraryGridView: View {
         .refreshable {
             photoLibrary.loadAssets()
         }
-        .background {
-            LimitedLibraryPickerPresenter(
-                isPresented: $isShowingLimitedLibraryPicker
-            ) {
-                photoLibrary.loadAssets()
-            }
-            .frame(width: 0, height: 0)
-            .accessibilityHidden(true)
+    }
+
+    private func openPhotoAccessSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+            return
         }
+        UIApplication.shared.open(url)
     }
 }
 
@@ -170,69 +166,5 @@ struct PhotoGridCell: View {
             )
         } ?? "未知日期"
         return asset.location == nil ? "\(date)，无位置信息" : "\(date)，有位置信息"
-    }
-}
-
-private struct LimitedLibraryPickerPresenter: UIViewControllerRepresentable {
-    @Binding var isPresented: Bool
-    let onCompletion: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .clear
-        return viewController
-    }
-
-    func updateUIViewController(
-        _ viewController: UIViewController,
-        context: Context
-    ) {
-        context.coordinator.parent = self
-        guard isPresented else { return }
-        context.coordinator.presentIfNeeded(from: viewController)
-    }
-
-    final class Coordinator {
-        var parent: LimitedLibraryPickerPresenter
-        private var isPresenting = false
-
-        init(parent: LimitedLibraryPickerPresenter) {
-            self.parent = parent
-        }
-
-        func presentIfNeeded(from viewController: UIViewController) {
-            guard !isPresenting else { return }
-            isPresenting = true
-
-            DispatchQueue.main.async { [weak self, weak viewController] in
-                guard let self, let viewController else { return }
-                guard self.parent.isPresented,
-                      viewController.viewIfLoaded?.window != nil,
-                      viewController.presentedViewController == nil else {
-                    self.finish(refreshAssets: false)
-                    return
-                }
-
-                PHPhotoLibrary.shared().presentLimitedLibraryPicker(
-                    from: viewController
-                ) { [weak self] (_: [String]) in
-                    DispatchQueue.main.async {
-                        self?.finish(refreshAssets: true)
-                    }
-                }
-            }
-        }
-
-        private func finish(refreshAssets: Bool) {
-            isPresenting = false
-            parent.isPresented = false
-            if refreshAssets {
-                parent.onCompletion()
-            }
-        }
     }
 }
