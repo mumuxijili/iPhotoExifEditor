@@ -152,15 +152,6 @@ struct PhotoEditorView: View {
                 }
             }
 
-            Toggle(
-                "中国大陆地图校正（GCJ‑02）",
-                isOn: $usesMainlandChinaCorrection
-            )
-
-            Text("只校正地图标记和选点。照片、复制的 JSON 和写入值始终使用 WGS‑84。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
 
             locationSummary
 

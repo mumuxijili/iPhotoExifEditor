@@ -1,4 +1,5 @@
 import CoreLocation
+import MapKit
 import SwiftUI
 
 struct GPSEditorView: View {
@@ -12,6 +13,7 @@ struct GPSEditorView: View {
 
     @State private var candidateLocation: CLLocation?
     @State private var isShowingSourcePicker = false
+    @State private var isShowingLocationSearch = false
 
     init(
         targetAssetID: String,
@@ -37,14 +39,22 @@ struct GPSEditorView: View {
                     candidateLocation = location
                 }
                 .overlay(alignment: .top) {
-                    Label(
-                        "长按地图选择新位置",
-                        systemImage: "hand.tap"
-                    )
+                    VStack(spacing: 3) {
+                        Label(
+                            "长按地图选择新位置",
+                            systemImage: "hand.tap"
+                        )
+                        Text("长按橙色“新”标记后可拖动微调")
+                            .font(.caption)
+                    }
                     .font(.callout.bold())
+                    .multilineTextAlignment(.center)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
+                    .background(
+                        .regularMaterial,
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
                     .padding()
                 }
 
@@ -58,24 +68,26 @@ struct GPSEditorView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Button {
-                        isShowingSourcePicker = true
-                    } label: {
-                        Label("从其他照片导入", systemImage: "photo.on.rectangle")
+                    HStack(spacing: 12) {
+                        Button {
+                            isShowingSourcePicker = true
+                        } label: {
+                            Label(
+                                "从照片导入",
+                                systemImage: "photo.on.rectangle"
+                            )
                             .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            isShowingLocationSearch = true
+                        } label: {
+                            Label("搜索地点", systemImage: "magnifyingglass")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
-
-                    Toggle(
-                        "中国大陆地图校正（GCJ‑02）",
-                        isOn: $usesMainlandChinaCorrection
-                    )
-                    .font(.footnote)
-
-                    Text("该选项只校正地图显示和选点；照片草稿始终使用 WGS‑84。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding()
                 .background(.bar)
@@ -109,6 +121,11 @@ struct GPSEditorView: View {
                 }
             }
         }
+        .sheet(isPresented: $isShowingLocationSearch) {
+            LocationSearchView(initialRegion: searchRegion) { mapCoordinate in
+                setCandidateFromMapCoordinate(mapCoordinate)
+            }
+        }
     }
 
     private var candidateForMap: CLLocation? {
@@ -126,6 +143,33 @@ struct GPSEditorView: View {
         return !Self.coordinatesMatch(
             candidateLocation.coordinate,
             originalLocation.coordinate
+        )
+    }
+
+    private var searchRegion: MKCoordinateRegion? {
+        guard let location = candidateLocation ?? originalLocation else {
+            return nil
+        }
+        let mapCoordinate = CoordinateConverter.mapCoordinate(
+            fromWGS84: location.coordinate,
+            usesGCJ02: usesMainlandChinaCorrection
+        )
+        return MKCoordinateRegion(
+            center: mapCoordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+        )
+    }
+
+    private func setCandidateFromMapCoordinate(
+        _ mapCoordinate: CLLocationCoordinate2D
+    ) {
+        let wgs84Coordinate = CoordinateConverter.wgs84Coordinate(
+            fromMapCoordinate: mapCoordinate,
+            usesGCJ02: usesMainlandChinaCorrection
+        )
+        candidateLocation = CLLocation(
+            latitude: wgs84Coordinate.latitude,
+            longitude: wgs84Coordinate.longitude
         )
     }
 

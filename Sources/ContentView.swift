@@ -6,11 +6,24 @@ import UIKit
 struct ContentView: View {
     @EnvironmentObject private var photoLibrary: PhotoLibraryStore
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isShowingSettings = false
 
     var body: some View {
         NavigationStack {
             content
                 .navigationTitle("照片")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            isShowingSettings = true
+                        } label: {
+                            Label("设置", systemImage: "gearshape")
+                        }
+                    }
+                }
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView()
         }
         .onChange(of: scenePhase) { phase in
             if phase == .active {

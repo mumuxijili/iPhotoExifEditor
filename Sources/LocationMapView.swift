@@ -25,15 +25,13 @@ struct LocationMapView: UIViewRepresentable {
             action: #selector(Coordinator.handleLongPress(_:))
         )
         recognizer.minimumPressDuration = 0.6
+        recognizer.delegate = context.coordinator
         mapView.addGestureRecognizer(recognizer)
         return mapView
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
         context.coordinator.parent = self
-
-        let existing = mapView.annotations.compactMap { $0 as? LocationAnnotation }
-        mapView.removeAnnotations(existing)
 
         var annotations: [LocationAnnotation] = []
         if let originalLocation {
@@ -64,8 +62,6 @@ struct LocationMapView: UIViewRepresentable {
             )
         }
 
-        mapView.addAnnotations(annotations)
-
         let signature = annotations
             .map {
                 "\($0.kind.rawValue):\($0.coordinate.latitude):\($0.coordinate.longitude)"
@@ -74,6 +70,15 @@ struct LocationMapView: UIViewRepresentable {
 
         guard signature != context.coordinator.lastRegionSignature else { return }
         context.coordinator.lastRegionSignature = signature
+
+        let existing = mapView.annotations.compactMap { $0 as? LocationAnnotation }
+        mapView.removeAnnotations(existing)
+        mapView.addAnnotations(annotations)
+
+        if context.coordinator.suppressNextRegionUpdate {
+            context.coordinator.suppressNextRegionUpdate = false
+            return
+        }
 
         if annotations.count == 1, let coordinate = annotations.first?.coordinate {
             mapView.setRegion(
@@ -98,13 +103,28 @@ struct LocationMapView: UIViewRepresentable {
         context.coordinator.hasSetRegion = true
     }
 
-    final class Coordinator: NSObject, MKMapViewDelegate {
+    final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var parent: LocationMapView
         var lastRegionSignature = ""
         var hasSetRegion = false
+        var suppressNextRegionUpdate = false
 
         init(parent: LocationMapView) {
             self.parent = parent
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldReceive touch: UITouch
+        ) -> Bool {
+            var touchedView: UIView? = touch.view
+            while let view = touchedView {
+                if view is MKAnnotationView {
+                    return false
+                }
+                touchedView = view.superview
+            }
+            return true
         }
 
         @objc
@@ -133,6 +153,40 @@ struct LocationMapView: UIViewRepresentable {
 
         func mapView(
             _ mapView: MKMapView,
+            annotationView view: MKAnnotationView,
+            didChange newState: MKAnnotationView.DragState,
+            fromOldState oldState: MKAnnotationView.DragState
+        ) {
+            guard let annotation = view.annotation as? LocationAnnotation,
+                  annotation.kind == .proposed else {
+                return
+            }
+
+            switch newState {
+            case .starting:
+                view.setDragState(.dragging, animated: true)
+            case .ending:
+                let wgs84Coordinate = CoordinateConverter.wgs84Coordinate(
+                    fromMapCoordinate: annotation.coordinate,
+                    usesGCJ02: parent.usesMainlandChinaCorrection
+                )
+                view.setDragState(.none, animated: true)
+                suppressNextRegionUpdate = true
+                parent.onLongPress?(
+                    CLLocation(
+                        latitude: wgs84Coordinate.latitude,
+                        longitude: wgs84Coordinate.longitude
+                    )
+                )
+            case .canceling:
+                view.setDragState(.none, animated: true)
+            default:
+                break
+            }
+        }
+
+        func mapView(
+            _ mapView: MKMapView,
             viewFor annotation: MKAnnotation
         ) -> MKAnnotationView? {
             guard let locationAnnotation = annotation as? LocationAnnotation else {
@@ -148,6 +202,8 @@ struct LocationMapView: UIViewRepresentable {
             )
             marker.annotation = annotation
             marker.canShowCallout = true
+            marker.isDraggable =
+                parent.allowsPicking && locationAnnotation.kind == .proposed
 
             switch locationAnnotation.kind {
             case .original:
@@ -177,7 +233,7 @@ private final class LocationAnnotation: NSObject, MKAnnotation {
         case proposed
     }
 
-    let coordinate: CLLocationCoordinate2D
+    @objc dynamic var coordinate: CLLocationCoordinate2D
     let kind: Kind
 
     var title: String? {
