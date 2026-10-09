@@ -14,7 +14,7 @@
 - 在写入前显示新旧值并进行二次确认
 - 写入后重新读取目标资产并校验结果
 
-应用不会删除照片，不会生成新照片，也不会替换图片文件。最终确认只会修改明确选择的 `PHAsset.location` 或 `PHAsset.creationDate`。
+应用不会删除照片，不会生成新照片，也不会替换图片文件。最终确认只会修改明确选择的 `PHAsset.location` 或 `PHAsset.creationDate`。这些值属于照片图库资产；原始图片文件的 EXIF 不会直接改写。因此从其他应用选择原始文件发送时，接收方可能看不到在本 App 中新增的 GPS。
 
 ## 云端构建
 
@@ -23,10 +23,10 @@
 1. 在 `project.yml` 中把 `PRODUCT_BUNDLE_IDENTIFIER` 改成你长期使用的唯一标识。
 2. 提交并推送到 `master` 分支。
 3. 打开 GitHub 仓库的 Actions 页面，等待 **Build iPhotoExifEditor IPA** 完成。
-4. 下载 `iPhotoExifEditor-IPA` Artifact，解压得到未签名 IPA。
+4. 在仓库的 **Releases** 页面下载 `iPhotoExifEditor.ipa`。Actions 页面仍会保留 `iPhotoExifEditor-IPA` Artifact。
 5. 使用 SideStore 重签名并安装。
 
-也可以在 Actions 页面手动运行工作流。
+推送到 `master` 或在 `master` 上手动运行工作流时，编译成功后会直接创建 Release，附上本次编译的未签名 IPA。标签格式为 `v<版本号>-build<构建号>-run<运行 ID>-<尝试次数>`，每次运行都有独立标签，不查询旧版。版本号和 Build 号来自本次编译的 App。
 
 ## 抓取 iPhone 崩溃日志
 

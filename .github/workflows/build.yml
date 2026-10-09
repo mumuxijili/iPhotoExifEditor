@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: macos-26
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -46,3 +48,24 @@ jobs:
         with:
           name: iPhotoExifEditor-IPA
           path: iPhotoExifEditor.ipa
+
+      - name: Publish master release
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          app_info="build/Build/Products/Release-iphoneos/iPhotoExifEditor.app/Info.plist"
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_info")
+          build_number=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_info")
+          tag="v${version}-build${build_number}-run${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          printf '%s\n' \
+            "Unsigned IPA for SideStore signing and installation." \
+            "Source commit: ${GITHUB_SHA}" \
+            > release-notes.md
+          gh release create "$tag" iPhotoExifEditor.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "iPhotoExifEditor ${version} (Build ${build_number})" \
+            --notes-file release-notes.md \
+            --latest

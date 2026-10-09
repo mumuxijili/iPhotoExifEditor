@@ -174,6 +174,11 @@ struct PhotoEditorView: View {
                 .disabled(draft.displayedLocation == nil)
             }
 
+            Text("修改的是照片图库中的位置；原始图片文件的 EXIF 不会直接改变。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             if draft.hasLocationChange {
                 Divider()
 
@@ -367,7 +372,7 @@ struct PhotoEditorView: View {
             目标：\(draft.targetAssetID)
             原位置：\(Self.coordinateText(draft.originalLocation))
             新位置：\(Self.coordinateText(draft.pendingLocation))
-            此操作不会删除、生成或替换图片。
+            只修改照片图库的位置，不改写原始图片文件的 EXIF；不会删除、生成或替换图片。
             """
         case .writeDate:
             return """
@@ -428,8 +433,8 @@ struct PhotoEditorView: View {
             case let .success(refreshedAsset):
                 draft.acceptLocation(refreshedAsset.location)
                 feedback = EditorFeedback(
-                    title: "GPS 修改成功",
-                    message: "已重新读取并核对目标照片的位置。"
+                    title: "图库位置修改成功",
+                    message: "已重新读取并核对照片图库中的位置。原始图片文件的 EXIF 不会直接改变。"
                 )
             case let .failure(error):
                 feedback = EditorFeedback(

@@ -543,11 +543,14 @@ on:
 jobs:
   build:
     runs-on: macos-26
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Xcode
+      - name: Show Xcode version
         run: xcodebuild -version
 
       - name: Install XcodeGen
@@ -556,7 +559,7 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build for iPhone
+      - name: Build unsigned app
         run: |
           xcodebuild \
             -project iPhotoExifEditor.xcodeproj \
@@ -568,7 +571,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Package IPA
+      - name: Package unsigned IPA
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/iPhotoExifEditor.app Payload/
@@ -580,6 +583,27 @@ jobs:
         with:
           name: iPhotoExifEditor-IPA
           path: iPhotoExifEditor.ipa
+
+      - name: Publish master release
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          app_info="build/Build/Products/Release-iphoneos/iPhotoExifEditor.app/Info.plist"
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_info")
+          build_number=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_info")
+          tag="v${version}-build${build_number}-run${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          printf '%s\n' \
+            "Unsigned IPA for SideStore signing and installation." \
+            "Source commit: ${GITHUB_SHA}" \
+            > release-notes.md
+          gh release create "$tag" iPhotoExifEditor.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "iPhotoExifEditor ${version} (Build ${build_number})" \
+            --notes-file release-notes.md \
+            --latest
 ```
 
 **说明：** `macos-26` 的实际可用性和预装 Xcode 版本取决于 GitHub Actions 当前 Runner 环境。如果仓库不支持该标签，改用 GitHub 官方当前支持的 macOS Runner 标签，并确认其 `xcodebuild -version`。`brew install xcodegen` 需要网络与 Homebrew 可用。这里使用 `build` 而非 `archive/exportArchive`，因为目标是供 SideStore 重新签名的未签名 IPA。
@@ -588,17 +612,16 @@ jobs:
 
 1. 将上述文件提交到 GitHub 仓库的 `master` 分支。
 2. 打开仓库 **Actions** → **Build iPhotoExifEditor IPA** → **Run workflow**（也可直接 Push 触发）。
-3. 等待 Build 成功。
-4. 在该 Workflow Run 页面下载 Artifact `iPhotoExifEditor-IPA`。
-5. 解压 GitHub 下载的 Artifact ZIP，取得内部的 `iPhotoExifEditor.ipa`。
-6. 将 IPA 传到 iPhone，在 SideStore 中导入并安装。
-7. 首次运行时允许照片库读写访问，选择源照片、目标照片并测试。
+3. 等待 Build 成功；成功后工作流直接创建 GitHub Release，附上本次编译的未签名 IPA。
+4. 在仓库 **Releases** 页面下载 `iPhotoExifEditor.ipa`；Actions 中的 `iPhotoExifEditor-IPA` Artifact 也会保留。
+5. 将 IPA 传到 iPhone，在 SideStore 中导入并安装。
+6. 首次运行时允许照片库读写访问，选择源照片、目标照片并测试。
 
 ## 6. 版本升级与 SideStore
 
 - **通常不需要先卸载旧版**：在 SideStore 中安装新版 IPA，若最终 Bundle ID 和签名身份兼容，系统通常会作为同一 App 的更新处理。
 - 固定 `PRODUCT_BUNDLE_IDENTIFIER`，例如始终为 `com.yourname.iphotoexifeditor`。
-- 每次构建建议增加 `CURRENT_PROJECT_VERSION`，例如 1 → 2 → 3；需要时增加 `MARKETING_VERSION`。
+- Release 标签格式为 `v<版本号>-build<构建号>-run<运行 ID>-<尝试次数>`，每次成功运行都会发布本次 IPA。App 升级时按需增加 `CURRENT_PROJECT_VERSION` 和 `MARKETING_VERSION`。
 - SideStore 可能重写 Bundle ID 或采用特定签名方式。若发生覆盖安装失败，先检查最终签名后的 App 身份，而不是立即卸载。
 - 卸载会丢失 App 沙盒数据并可能重置权限；PhotoKit 写入系统照片库的修改不等同于 App 沙盒数据。
 
