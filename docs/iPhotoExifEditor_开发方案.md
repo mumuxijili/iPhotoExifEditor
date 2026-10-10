@@ -539,6 +539,11 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
+    paths:
+      - "Sources/**"
+      - "project.yml"
+      - "LICENSE"
+      - ".github/workflows/build.yml"
 
 jobs:
   build:
